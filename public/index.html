@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>КАССЕТА.TUBE — домашний видеоархив</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='64' y='18' fill='%23222'/><rect x='12' y='30' width='26' height='26' rx='13' fill='%23d4d0c8'/><rect x='62' y='30' width='26' height='26' rx='13' fill='%23d4d0c8'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="loadbar"></div>
+
+<div class="desktop">
+
+  <header class="win headwin">
+    <div class="titlebar"><b>КАССЕТА.TUBE — домашний видеоархив</b>
+      <span class="tb-btns"><button class="tbb">—</button><button class="tbb">□</button><button class="tbb x">✕</button></span>
+    </div>
+    <div class="headrow">
+      <a class="logo" href="#/">КАССЕТА<b>.TUBE</b></a>
+      <span class="rec"><i></i>[REC]</span>
+      <div class="search"><input id="search" type="text" maxlength="80" placeholder="поиск по архиву...  [/]"><button class="btn95" id="goSearch">НАЙТИ</button></div>
+      <span class="clock" id="clock">--:--:--</span>
+      <div id="authbox"></div>
+    </div>
+  </header>
+
+  <div class="ticker"><div class="ticker-track" id="ticker">
+    <span>*** ПОДКЛЮЧЕНИЕ К АРХИВУ... *** </span><span>*** ПОДКЛЮЧЕНИЕ К АРХИВУ... *** </span>
+  </div></div>
+
+  <div class="layout">
+    <aside class="side">
+      <div class="win">
+        <div class="titlebar"><b>НАВИГАЦИЯ</b></div>
+        <nav class="navlist">
+          <a class="btn95" href="#/">&gt;&ensp;ГЛАВНАЯ</a>
+          <a class="btn95" href="#/top">&gt;&ensp;ПОПУЛЯРНОЕ</a>
+          <a class="btn95" href="#/best">&gt;&ensp;ТОП ЛАЙКОВ</a>
+          <a class="btn95" href="#/random">&gt;&ensp;СЛУЧАЙНАЯ</a>
+          <a class="btn95" href="#/upload">&gt;&ensp;ЗАГРУЗКА</a>
+          <a class="btn95" href="#/studio">&gt;&ensp;КАБИНЕТ</a>
+          <a class="btn95" href="#/settings">&gt;&ensp;НАСТРОЙКИ</a>
+          <a class="btn95" href="#/rules">&gt;&ensp;ПРАВИЛА</a>
+          <a class="btn95" href="#/about">&gt;&ensp;О ИНСТАНСЕ</a>
+        </nav>
+      </div>
+      <div class="win">
+        <div class="titlebar"><b>ЭФИР</b></div>
+        <div class="stats">
+          <div class="stat"><span>КАССЕТ</span><span class="odo" id="odVids"></span></div>
+          <div class="stat"><span>ПРОСМОТРОВ</span><span class="odo" id="odViews"></span></div>
+          <div class="stat"><span>ЛАЙКОВ</span><span class="odo amber" id="odLikes"></span></div>
+          <div class="stat"><span>ПОЛЬЗОВАТЕЛЕЙ</span><span class="odo amber" id="odUsers"></span></div>
+        </div>
+      </div>
+      <div class="win"><div class="tip">СОВЕТ: нажмите / чтобы открыть поиск. Лайки и подписки доступны только зарегистрированным.</div></div>
+    </aside>
+
+    <main id="view"></main>
+  </div>
+
+  <footer class="foot">
+    (c) 1998-<span id="year"></span> КАССЕТА.TUBE · собрано вручную на node.js · 
+    <a href="#/support" style="color:rgba(255,255,255,.85);text-decoration:underline">ПОДДЕРЖАТЬ ПРОЕКТ</a>
+    · перед просмотром перемотайте плёнку <span class="blink">_</span>
+  </footer>
+</div>
+
+<div id="toasts"></div>
+<script src="app.js"></script>
+</body>
+</html>
