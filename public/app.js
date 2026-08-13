@@ -556,9 +556,9 @@ async function renderAdmin(){
   <div class="win">
     <div class="titlebar"><b>СТРАНИЦЫ — ПРАВИЛА / О ИНСТАНСЕ</b>${tbBtns()}</div>
     <div class="form pad10">
-      <div class="field"><label>ПРАВИЛА (markdown: # заголовок, - список, **жирный**)</label><textarea id="pgRules" style="min-height:150px">${esc(pgRules.text)}</textarea></div>
+      <div class="field"><label>ПРАВИЛА (markdown)</label><textarea id="pgRules" style="min-height:150px">${esc(pgRules.text)}</textarea></div>
       <div class="acts"><button class="btn95" id="pgRulesSave">СОХРАНИТЬ ПРАВИЛА</button></div>
-      <div class="field"><label>О ИНСТАНСЕ (контакты, куда слать скриншоты переводов)</label><textarea id="pgAbout" style="min-height:150px">${esc(pgAbout.text)}</textarea></div>
+      <div class="field"><label>О ИНСТАНСЕ</label><textarea id="pgAbout" style="min-height:150px">${esc(pgAbout.text)}</textarea></div>
       <div class="acts"><button class="btn95" id="pgAboutSave">СОХРАНИТЬ О ИНСТАНСЕ</button></div>
     </div>
   </div>`;
