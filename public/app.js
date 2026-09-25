@@ -1,7 +1,6 @@
 'use strict';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const escAttr = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtN = n => String(n ?? 0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 const fmtDur = s => { s = Math.max(0, Math.round(+s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const fmtDate = t => new Date(t).toLocaleDateString('ru-RU');
@@ -13,7 +12,7 @@ let ME = null;
 const badges = (u) => {
   if (!u) return '';
   const out = [];
-  const name = escAttr(u.name);
+  const name = esc(u.name);
   if (u.founder)     out.push(`<span class="badge b-founder" title="${name} — основатель этого инстанса">🥖</span>`);
   if (u.admin)       out.push(`<span class="badge b-admin" title="${name} — администратор этого инстанса!">🛠️</span>`);
   if (u.supporter)   out.push(`<span class="badge b-supporter" title="${name} поддержал(а) этот инстанс!">💜</span>`);
@@ -22,21 +21,67 @@ const badges = (u) => {
 
 const md = (text) => {
   const inline = s => esc(s)
-    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
-    .replace(/\*([^*]+)\*/g, '<i>$1</i>')
-    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-  let html = '', inList = false;
-  const close = () => { if (inList){ html += '</ul>'; inList = false; } };
-  for (const raw of String(text || '').split('\n')){
+    .replace(/`([^`]*?)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+?)\*\*/g, '<b>$1</b>')
+    .replace(/__([^_]+?)__/g, '<b>$1</b>')
+    .replace(/!\[([^\]]*)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/~~([^~]+?)~~/g, '<del>$1</del>')
+    .replace(/\*([^*]+?)\*/g, '<i>$1</i>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+
+  const lines = String(text || '').split('\n');
+  let html = '', list = null, table = null, codeStart = null;
+  const flushTable = () => {
+    if (!table) return;
+    html += '<table>';
+    if (table.length){
+      html += '<thead><tr>' + table[0].map(c => '<th>' + c + '</th>').join('') + '</tr></thead>';
+      html += '<tbody>' + table.slice(1).map(r => '<tr>' + r.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</tbody>';
+    }
+    html += '</table>'; table = null;
+  };
+  const closeAll = () => {
+    flushTable();
+    if (list){ html += list === 'ul' ? '</ul>' : '</ol>'; list = null; }
+  };
+  for (const raw of lines){
     const line = raw.replace(/\s+$/, '');
-    if (/^###\s/.test(line)){ close(); html += '<h4>' + inline(line.slice(4)) + '</h4>'; }
-    else if (/^##\s/.test(line)){ close(); html += '<h3>' + inline(line.slice(3)) + '</h3>'; }
-    else if (/^#\s/.test(line)){ close(); html += '<h2>' + inline(line.slice(2)) + '</h2>'; }
-    else if (/^[-*]\s/.test(line)){ if (!inList){ html += '<ul>'; inList = true; } html += '<li>' + inline(line.slice(2)) + '</li>'; }
-    else if (line.trim() === ''){ close(); }
-    else { close(); html += '<p>' + inline(line) + '</p>'; }
+    if (/^```/.test(line)){
+      if (codeStart == null){ closeAll(); codeStart = html.length; html += '<pre><code>'; }
+      else { html += '</code></pre>'; codeStart = null; }
+      continue;
+    }
+    if (codeStart != null){ html += esc(line) + '\n'; continue; }
+    const trimmed = line.trim();
+    if (!trimmed){ closeAll(); continue; }
+    if (/^\|.*\|\s*$/.test(trimmed)){
+      if (/^\|?[\s:|-]+\|?\s*$/.test(trimmed)) continue;
+      if (!table) closeAll(), table = [];
+      table.push(trimmed.replace(/^\||\|$/g, '').split('|').map(c => inline(c.trim())));
+      continue;
+    }
+    if (/^[-*+]\s+/.test(trimmed)){
+      if (list !== 'ul'){ closeAll(); html += '<ul>'; list = 'ul'; }
+      html += '<li>' + inline(trimmed.replace(/^[-*+]\s+/, '')) + '</li>';
+      continue;
+    }
+    if (/^\d+[.)]\s+/.test(trimmed)){
+      if (list !== 'ol'){ closeAll(); html += '<ol>'; list = 'ol'; }
+      html += '<li>' + inline(trimmed.replace(/^\d+[.)]\s+/, '')) + '</li>';
+      continue;
+    }
+    closeAll();
+    if (/^#{1,6}\s+/.test(line)){
+      const lvl = line.match(/^#{1,6}/)[0].length;
+      html += '<h' + lvl + '>' + inline(line.slice(lvl + 1).replace(/\s+#+\s*$/, '')) + '</h' + lvl + '>';
+    }
+    else if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) html += '<hr>';
+    else if (/^>\s?/.test(trimmed)) html += '<blockquote><p>' + inline(trimmed.replace(/^>\s?/, '')) + '</p></blockquote>';
+    else html += '<p>' + inline(line) + '</p>';
   }
-  close();
+  closeAll();
+  if (codeStart != null) html += '</code></pre>';
   return html;
 };
 
@@ -76,12 +121,14 @@ document.addEventListener('click', e => {
 });
 
 function odo(el, n){ el.innerHTML = [...String(Math.max(0, n)).padStart(5, '0')].map(d => `<i>${d}</i>`).join(''); }
+let MAX_MB = 5000;
 async function pullStats(){
   try {
     const s = await fetch('/api/stats').then(r => r.json());
     odo($('#odVids'), s.videos); odo($('#odViews'), s.views);
     odo($('#odLikes'), s.likes); odo($('#odUsers'), s.users);
-    const line = `*** АРХИВ: ${fmtN(s.videos)} КАССЕТ *** ПРОСМОТРОВ: ${fmtN(s.views)} *** ЛАЙКОВ: ${fmtN(s.likes)} *** ПОЛЬЗОВАТЕЛЕЙ: ${fmtN(s.users)} *** ЗАГРУЗИ СВОЮ КАССЕТУ — ЭФИР СВОБОДЕН *** ЛИМИТ 5 ГБ *** `;
+    MAX_MB = s.maxMb || MAX_MB;
+    const line = `*** АРХИВ: ${fmtN(s.videos)} КАССЕТ *** ПРОСМОТРОВ: ${fmtN(s.views)} *** ЛАЙКОВ: ${fmtN(s.likes)} *** ПОЛЬЗОВАТЕЛЕЙ: ${fmtN(s.users)} *** ЗАГРУЗИ СВОЮ КАССЕТУ — ЭФИР СВОБОДЕН *** ЛИМИТ ${fmtSize(MAX_MB * 1024 * 1024)} *** `;
     $('#ticker').innerHTML = `<span>${line}</span><span>${line}</span>`;
   } catch {}
 }
@@ -179,7 +226,7 @@ async function renderWatch(id){
             <small>хранитель кассеты</small>
           </div>
         </div>
-        <div class="desc">${v.desc ? esc(v.desc) : '<i>описание отсутствует...</i>'}</div>
+        <div class="desc">${v.desc ? md(v.desc) : '<i>описание отсутствует...</i>'}</div>
       </div>
     </div>
     <aside>
@@ -476,7 +523,7 @@ async function renderUser(name){
           <span class="spacer"></span>
           ${canSub ? `<button class="btn95 ${p.subbed ? 'on' : ''}" id="subBtn">${p.subbed ? '[x] ВЫ ПОДПИСАНЫ' : '[+] ПОДПИСАТЬСЯ'}</button>` : ''}
         </div>
-        ${p.bio ? `<div class="bio">${esc(p.bio)}</div>` : ''}
+        ${p.bio ? `<div class="bio">${md(p.bio)}</div>` : ''}
         <div class="grid">${p.videos.length ? p.videos.map(card).join('') : emptyState('У канала пока нет кассет.')}</div>
       </div>
     </div>
@@ -534,6 +581,7 @@ async function renderAdmin(){
           <button class="btn95 mini" data-ban="${u.id}" ${u.founder ? 'disabled' : ''}>${u.banned ? 'РАЗБАНИТЬ' : 'БАН'}</button>
           <button class="btn95 mini" data-kick="${u.id}">СЕССИИ</button>
           <button class="btn95 mini" data-pass="${u.id}">ПАРОЛЬ</button>
+          <button class="btn95 mini" data-delvids="${u.id}" ${u.videos === 0 ? 'disabled' : ''}>ОЧИСТИТЬ ВИДЕО</button>
           <button class="btn95 mini" data-deluser="${u.id}" ${u.founder || isMe ? 'disabled' : ''}>УДАЛИТЬ</button>
         </td></tr>`;
       }).join('')}
@@ -545,10 +593,10 @@ async function renderAdmin(){
       <tr><th>КАССЕТА</th><th>АВТОР</th><th>ПРОСМ.</th><th>ЛАЙКИ</th><th>РАЗМЕР</th><th></th></tr>
       ${vids.map(v => `<tr>
         <td><a href="#/watch/${v.id}">${esc(v.title)}</a></td>
-        <td>${v.uid ? badges({ founder: v.ufounded, admin: v.uadmin, supporter: v.usupporter, name: v.author }) + '<a href="#/user/' + encodeURIComponent(v.author) + '">@' + esc(v.author) + '</a>' : '<span class="banned">ничья</span>'}</td>
+        <td>${v.uowner ? badges({ founder: v.ufounded, admin: v.uadmin, supporter: v.usupporter, name: v.author }) + '<a href="#/user/' + encodeURIComponent(v.author) + '">@' + esc(v.author) + '</a>' : '<span class="banned">ничья</span>'}</td>
         <td class="num">${fmtN(v.views)}</td><td class="num">${fmtN(v.likes)}</td><td class="num">${fmtSize(v.size)}</td>
         <td class="acts-cell">
-          ${v.uid ? '' : `<button class="btn95 mini" data-claim="${v.id}">ЗАБРАТЬ</button>`}
+          ${v.uowner ? '' : `<button class="btn95 mini" data-claim="${v.id}">ЗАБРАТЬ</button>`}
           <button class="btn95 mini" data-delvideo="${v.id}">УДАЛИТЬ</button>
         </td></tr>`).join('')}
     </table></div>
@@ -607,9 +655,18 @@ async function renderAdmin(){
     toast('Пароль для @' + u.name + ' установлен: ' + p, '[*]');
     renderAdmin();
   });
+  $('#view').querySelectorAll('[data-delvids]').forEach(b => b.onclick = async () => {
+    const u = users.find(x => x.id === b.dataset.delvids);
+    if (u.videos === 0) return;
+    if (!confirm(`Удалить все кассеты @${u.name} (${u.videos} шт.)? Файлы будут стёрты с диска безвозвратно.`)) return;
+    const r = await fetch('/api/admin/users/' + u.id + '/videos', { method: 'POST' });
+    const j = await r.json();
+    if (!r.ok) return toast(j.error || 'Ошибка', '[!]');
+    toast('Удалено кассет: ' + j.deleted, '[*]'); pullStats(); renderAdmin();
+  });
   $('#view').querySelectorAll('[data-deluser]').forEach(b => b.onclick = async () => {
     const u = users.find(x => x.id === b.dataset.deluser);
-    if (!confirm(`Удалить пользователя @${u.name} вместе со всеми его кассетами?`)) return;
+    if (!confirm(`Удалить пользователя @${u.name}? Кассеты останутся в архиве как ничьи.`)) return;
     await fetch('/api/admin/users/' + u.id, { method: 'DELETE' });
     toast('Пользователь удалён', '[*]'); pullStats(); renderAdmin();
   });
@@ -693,7 +750,7 @@ function renderUpload(){
       <div class="reels"><span class="reel"></span><span class="reel"></span></div>
       <div class="big">ВСТАВЬТЕ КАССЕТУ</div>
       <div class="sub">перетащите видеофайл сюда или кликните по лотку<br>
-        mp4 / webm играют везде, остальное — как повезёт · лимит 5 ГБ<br>
+        mp4 / webm играют везде, остальное — как повезёт · лимит ${fmtSize(MAX_MB * 1024 * 1024)}<br>
         кассета будет привязана к ${badges(ME)}@${esc(ME.name)}</div>
       <input type="file" id="filepick" accept="video/*" hidden>
     </div>

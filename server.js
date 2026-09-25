@@ -6,8 +6,21 @@ const path = require('path');
 const fs   = require('fs');
 const crypto = require('crypto');
 
-const PORT   = process.env.PORT || 3000;
 const ROOT   = __dirname;
+function loadEnv(){
+  const f = path.join(ROOT, '.env');
+  if (!fs.existsSync(f)) return;
+  for (const line of fs.readFileSync(f, 'utf8').split('\n')){
+    const m = /^\s*([A-Za-z_][\w.]*)\s*=\s*(.*)$/.exec(line.trim());
+    if (!m || m[2].startsWith('#') || (m[1] in process.env)) continue;
+    let v = m[2].trim();
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+    process.env[m[1]] = v;
+  }
+}
+loadEnv();
+
+const PORT   = process.env.PORT || 3000;
 const UPLOADS  = path.join(ROOT, 'uploads');
 const AVATARS  = path.join(ROOT, 'avatars');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -27,6 +40,10 @@ if (SMTP_USER && SMTP_PASS){
   transporter = nodemailer.createTransport({
     host: SMTP_HOST, port: SMTP_PORT, secure: SMTP_PORT === 465,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
+  });
+  transporter.verify(err => {
+    if (err) console.log('  [SMTP] настроен, но почта не проходит: ' + err.response || err.message);
+    else console.log('  [SMTP] подключение к ' + SMTP_HOST + ' успешно (' + SMTP_USER + ')');
   });
 }
 
@@ -161,6 +178,7 @@ const pub  = v => {
   const u = v.uid ? db.users.find(x => x.id === v.uid) : null;
   return {
     ...v, url: '/uploads/' + v.file,
+    uowner: !!u,
     uavatar: u ? u.avatar : null,
     ufounded: u ? !!u.founder : false,
     usupporter: u ? !!u.supporter : false,
@@ -215,13 +233,14 @@ app.post('/api/auth/register', async (req, res) => {
   };
   save();
 
-  let sent = false;
-  try { sent = await sendCode(email, code); }
-  catch (e){ console.error('SMTP: ' + e.message); }
-
-  if (!sent){
-    console.log('[!] SMTP not configured. Code for ' + email + ': ' + code);
+  if (!transporter){
+    console.log('[!] SMTP не настроен. Код для ' + email + ': ' + code);
     return res.json({ pending: true, email, noSmtp: true, devCode: code });
+  }
+  try { await sendCode(email, code); }
+  catch (e){
+    console.error('[SMTP] ' + (e.response || e.message));
+    return res.status(500).json({ error: 'Письмо не отправилось: ' + (e.response || e.message) });
   }
   console.log('[*] code sent to ' + email);
   res.json({ pending: true, email });
@@ -362,6 +381,7 @@ app.get('/api/stats', (req, res) => {
     views:  db.videos.reduce((s, v) => s + (v.views || 0), 0),
     likes:  db.videos.reduce((s, v) => s + (v.likes || 0), 0),
     users:  db.users.length,
+    maxMb:  MAX_MB,
   });
 });
 
@@ -529,6 +549,16 @@ app.post('/api/admin/users/:id/ban', requireUser, adminOnly, (req, res) => {
   save(); res.json({ banned: u.banned });
 });
 
+app.post('/api/admin/users/:id/videos', requireUser, adminOnly, (req, res) => {
+  const u = db.users.find(x => x.id === req.params.id);
+  if (!u) return res.status(404).json({ error: 'Не найден' });
+  const gone = db.videos.filter(v => v.uid === u.id);
+  db.videos = db.videos.filter(v => v.uid !== u.id);
+  gone.forEach(v => fs.unlink(path.join(UPLOADS, v.file), () => {}));
+  save();
+  res.json({ deleted: gone.length });
+});
+
 app.post('/api/admin/users/:id/kick', requireUser, adminOnly, (req, res) => {
   const u = db.users.find(x => x.id === req.params.id);
   if (!u) return res.status(404).json({ error: 'Не найден' });
@@ -579,9 +609,6 @@ app.delete('/api/admin/users/:id', requireUser, adminOnly, (req, res) => {
   if (u.founder) return res.status(400).json({ error: 'Основателя удалить нельзя' });
   db.users = db.users.filter(x => x.id !== u.id);
   killSessions(u.id);
-  const gone = db.videos.filter(v => v.uid === u.id);
-  db.videos = db.videos.filter(v => v.uid !== u.id);
-  gone.forEach(v => fs.unlink(path.join(UPLOADS, v.file), () => {}));
   if (u.avatar) fs.unlink(path.join(ROOT, u.avatar.replace(/^\//, '')), () => {});
   db.users.forEach(x => { x.following = x.following.filter(id => id !== u.id); });
   db.videos.forEach(v => { v.likedBy = v.likedBy.filter(x => x !== u.id); });
@@ -607,7 +634,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('  KASSETA.TUBE v7 — port ' + PORT);
   console.log('  file limit: ' + MAX_MB + ' MB');
-  console.log('  smtp: ' + (transporter ? 'ok (' + SMTP_USER + ')' : 'not configured — codes in console'));
+  console.log('  smtp: ' + (transporter ? 'configured (' + SMTP_USER + '), проверка в логе выше' : 'not configured — коды в консоль'));
   console.log('');
 });
 server.requestTimeout = 0;
